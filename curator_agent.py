@@ -2,7 +2,6 @@ import os
 import requests
 from google import genai
 
-# Initialize environment variables
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -11,11 +10,19 @@ client = genai.Client(api_key=GEMINI_KEY)
 
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}
-    requests.post(url, json=payload)
+    # Removed parse_mode to prevent Markdown formatting failures
+    payload = {"chat_id": CHAT_ID, "text": text} 
+    
+    resp = requests.post(url, json=payload)
+    
+    # Print Telegram's exact response to the log
+    print(f"Telegram API Status: {resp.status_code}")
+    print(f"Telegram API Response: {resp.text}")
+    
+    # Force GitHub Actions to fail if Telegram returns an error
+    resp.raise_for_status()
 
 def evaluate_sample_spot():
-    # Sample post/reels data (In production, replace with scraped URLs/videos)
     sample_post = """
     Aesthetic new cafe in KL! Features warm oak wood tables, neutral Japandi decor, 
     spacious ground-floor seating with no entry steps, and a dedicated kids play corner.
@@ -32,7 +39,7 @@ def evaluate_sample_spot():
     2. Family/Kid Friendliness: Stroller access, play areas, high chairs?
     3. Comfort: Not overly cramped.
     
-    If it matches, summarize why in 3 bullet points with an enthusiasm rating.
+    If it matches, summarize why in 3 brief bullet points.
     """
     
     response = client.models.generate_content(
@@ -46,6 +53,7 @@ if __name__ == "__main__":
     print("Running Curator Agent...")
     report = evaluate_sample_spot()
     
-    message = f"☕ **Weekend Spot Recommendation** 🎈\n\n{report}"
+    message = f"☕ Weekend Spot Recommendation 🎈\n\n{report}"
     send_telegram_message(message)
-    print("Report sent to Telegram successfully!")
+    print("Report process completed!")
+    
