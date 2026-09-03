@@ -8,9 +8,10 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
+# Reduced timeout to 30s so it retries fast instead of hanging
 client = genai.Client(
     api_key=GEMINI_KEY,
-    http_options=types.HttpOptions(timeout=120000)
+    http_options=types.HttpOptions(timeout=30000)
 )
 
 def send_telegram_message(text):
@@ -24,33 +25,24 @@ def send_telegram_message(text):
     print(f"Telegram API Status: {resp.status_code}")
     resp.raise_for_status()
 
-
 def discover_fresh_spots():
     prompt = """
-    You are an expert local family outing curator for Kuala Lumpur.
+    You are an expert family outing curator for Kuala Lumpur.
     
-    Recommend EXACTLY 3 distinct, highly-rated family outing spots or cafes in or near:
-    - Taman Melawati
-    - Wangsa Maju
-    - Setapak
-    - Ampang
-
-    Requirements for each venue:
-    1. Aesthetic: Japandi, warm oak, or clean minimalist decor.
-    2. Kid/Family Friendly: Stroller accessible, high chairs, play corners, or open space for toddlers.
-    3. Comfort: Spacious and relaxed atmosphere.
-
-    Format the output strictly as Markdown:
+    Recommend 3 distinct family-friendly cafes/spots near Melawati, Wangsa Maju, Setapak, or Ampang.
     
-    ☕ **[Venue Name]** ([Area])
-    • **Google Maps:** [Link to Google Maps URL]
-    • **Instagram:** @[instagram_handle] (https://instagram.com/[instagram_handle])
-    • **Aesthetics Rating:** ⭐ [X/5] - [Short reason]
-    • **Kids Logistics Rating:** ⭐ [X/5] - [Short reason]
-    • **Summary:** [1-line summary]
+    Criteria:
+    - Japandi/warm oak/minimalist aesthetic
+    - Stroller access/high chairs/kids space
+    - Not overly cramped
 
-    ---
-    Provide creative, fresh recommendations across Wangsa Maju, Melawati, Setapak, and Ampang.
+    Format for each spot:
+    ☕ [Venue Name] ([Area])
+    • Google Maps: [Insert Search/Maps URL]
+    • Instagram: @[handle] (https://instagram.com/[handle])
+    • Aesthetics: ⭐ [X/5] - [Brief note]
+    • Kids Logistics: ⭐ [X/5] - [Brief note]
+    • Summary: [1-line summary]
     """
 
     print("Generating 3 recommendations with Gemini 3.6 Flash...")
@@ -66,7 +58,7 @@ def discover_fresh_spots():
             print(f"Attempt {attempt + 1} failed: {e}")
             if attempt == 2:
                 raise e
-            time.sleep(3)
+            time.sleep(1) # Fast 1-second retry pause
 
 if __name__ == "__main__":
     report = discover_fresh_spots()
