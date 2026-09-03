@@ -18,11 +18,12 @@ def send_telegram_message(text):
     payload = {
         "chat_id": CHAT_ID,
         "text": text,
-        "parse_mode": "Markdown",
         "disable_web_page_preview": False
     }
     resp = requests.post(url, json=payload)
+    print(f"Telegram API Status: {resp.status_code}")
     resp.raise_for_status()
+
 
 def discover_fresh_spots():
     prompt = """
