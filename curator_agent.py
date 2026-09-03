@@ -15,43 +15,40 @@ def send_telegram_message(text):
     resp.raise_for_status()
 
 def discover_fresh_spots():
-    # Enforce temporal constraints and verification rules
     prompt = """
-    You are an up-to-date local family concierge in KL. Your job is to find a FRESH, TRENDING, or NEWLY OPENED venue in Melawati, Wangsa Maju, Setapak, or Ampang.
+    You are an expert local family outing curator for Kuala Lumpur.
+    
+    Recommend 1 specific, highly-rated family outing spot or cafe in or near:
+    - Taman Melawati
+    - Wangsa Maju
+    - Setapak
+    - Ampang
 
-    RECENCY RULES:
-    1. Only consider spots that have recent reviews or posts from the LAST 30-60 DAYS, or newly opened spots in 2025/2026.
-    2. Exclude permanently closed venues or older 2021-2023 listicles.
-    3. Verify that the location is actively operating.
+    Family & Design Requirements:
+    1. Aesthetic: Japandi, warm oak, or clean minimalist decor.
+    2. Kid/Family Friendly: Stroller accessible, high chairs, or play/open area for active toddlers.
+    3. Comfort: Spacious and relaxed atmosphere.
 
-    FAMILY & DESIGN CRITERIA:
-    - Interior: Japandi, warm oak, or minimalist aesthetic.
-    - Family Friendly: Ground-floor or ramp access for strollers, high chairs, or play areas.
-    - Comfort: Not excessively cramped.
-
-    OUTPUT FORMAT:
-    📍 **[Venue Name]** - [Exact Area/Neighborhood]
-    🗓️ **Recency Proof:** [Mention recent review date or opening timeframe]
+    Return the response formatted as:
+    📍 **[Venue Name]** - [Area/Neighborhood]
     ⭐ **Match Details:**
-    • **Aesthetic:** [Design elements]
-    • **Kid Logistics:** [Stroller/play facilities]
-    • **Vibe & Tip:** [Best time to go to beat crowds]
+    • **Aesthetic:** [Design highlight]
+    • **Kid Logistics:** [Stroller/kids facilities]
+    • **Vibe & Tip:** [Best time to visit]
     """
 
-    print("Running grounded search for recent spots...")
+    print("Generating recommendation with Gemini...")
+    # Standard generation without Google Search tool to stay within free quota
     response = client.models.generate_content(
-        model="gemini-3.5-flash",
-        contents=prompt,
-        config={
-            "tools": [{"google_search": {}}]
-        }
+        model="gemini-2.5-flash",
+        contents=prompt
     )
     
     return response.text
 
 if __name__ == "__main__":
     report = discover_fresh_spots()
-    message = f"☕ **Fresh Weekend Spot Finding** 🎈\n\n{report}"
+    message = f"☕ **Weekend Spot Recommendation** 🎈\n\n{report}"
     send_telegram_message(message)
-    print("Fresh recommendation sent to Telegram!")
+    print("Recommendation successfully sent to Telegram!")
     
