@@ -19,10 +19,9 @@ def send_telegram_message(text):
         "chat_id": CHAT_ID,
         "text": text,
         "parse_mode": "Markdown",
-        "disable_web_page_preview": False  # Enables visual link previews in Telegram
+        "disable_web_page_preview": False
     }
     resp = requests.post(url, json=payload)
-    print(f"Telegram API Status: {resp.status_code}")
     resp.raise_for_status()
 
 def discover_fresh_spots():
@@ -40,17 +39,17 @@ def discover_fresh_spots():
     2. Kid/Family Friendly: Stroller accessible, high chairs, play corners, or open space for toddlers.
     3. Comfort: Spacious and relaxed atmosphere.
 
-    Format the output strictly as a Markdown report containing 3 entries. For each entry, provide:
+    Format the output strictly as Markdown:
     
     ☕ **[Venue Name]** ([Area])
     • **Google Maps:** [Link to Google Maps URL]
     • **Instagram:** @[instagram_handle] (https://instagram.com/[instagram_handle])
     • **Aesthetics Rating:** ⭐ [X/5] - [Short reason]
-    • **Kids Logistics Rating:** ⭐ [X/5] - [Short reason regarding strollers/kids space]
-    • **Summary:** [A single 1-line summary sentence capturing why it's great for the weekend]
+    • **Kids Logistics Rating:** ⭐ [X/5] - [Short reason]
+    • **Summary:** [1-line summary]
 
     ---
-    Ensure real, accurate venue names located around Ampang, Wangsa Maju, Melawati, or Setapak (e.g., Mori Kohi, Botanica+Co at Bamboo Hills, Green Tomato Cafe, or VCR Ritchie).
+    Provide creative, fresh recommendations across Wangsa Maju, Melawati, Setapak, and Ampang.
     """
 
     print("Generating 3 recommendations with Gemini 3.6 Flash...")
