@@ -40,7 +40,7 @@ def discover_fresh_spots():
     print("Generating recommendation with Gemini...")
     # Standard generation without Google Search tool to stay within free quota
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         contents=prompt
     )
     
