@@ -1,94 +1,117 @@
 import os
-import time
+import random
 import urllib.parse
 import requests
 from google import genai
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
+PLACES_KEY = os.environ.get("PLACES_API_KEY")
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 client = genai.Client(api_key=GEMINI_KEY)
+
+# Target neighborhoods to randomly cycle through
+AREAS = ["Taman Melawati", "Wangsa Maju", "Setapak", "Ampang"]
+QUERY_TYPES = ["aesthetic cafe", "family friendly cafe", "bakery cafe", "garden cafe"]
 
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
         "text": text,
-        "disable_web_page_preview": True
+        "disable_web_page_preview": False
     }
     resp = requests.post(url, json=payload)
+    print(f"Telegram API Status: {resp.status_code}")
     resp.raise_for_status()
 
-def discover_fresh_spots():
-    # Force Gemini to return simple structured text so Python can format working links
-    prompt = """
-    You are a strictly accurate family outing curator for Kuala Lumpur.
+def fetch_real_places():
+    """Queries Google Places API (New) for operational cafes in target areas."""
+    selected_area = random.choice(AREAS)
+    query_type = random.choice(QUERY_TYPES)
+    search_query = f"{query_type} in {selected_area}, Kuala Lumpur"
     
-    Provide EXACTLY 3 REAL, CURRENTLY OPERATING family-friendly cafes in:
-    - Taman Melawati
-    - Wangsa Maju
-    - Setapak
-    - Ampang
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": PLACES_KEY,
+        # Field mask restricts returned data to keep costs at basic/pro tier
+        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.googleMapsUri,places.businessStatus,places.userRatingCount"
+    }
+    payload = {
+        "textQuery": search_query,
+        "maxResultCount": 8,
+        "minRating": 4.0
+    }
+    
+    resp = requests.post(url, headers=headers, json=payload)
+    resp.raise_for_status()
+    results = resp.json().get("places", [])
+    
+    # Filter for OPERATIONAL venues only
+    operational_places = [
+        p for p in results 
+        if p.get("businessStatus") == "OPERATIONAL" and p.get("userRatingCount", 0) > 20
+    ]
+    
+    # Return up to 3 random verified places
+    if len(operational_places) >= 3:
+        return random.sample(operational_places, 3)
+    return operational_places
 
-    Requirements:
-    1. Only recommend real places active in 2026.
-    2. Format output strictly like this for each venue:
+def evaluate_places_with_gemini(places):
+    """Passes verified real places to Gemini 3.6 Flash for aesthetic & logistics evaluation."""
+    places_summary = ""
+    for idx, p in enumerate(places, 1):
+        name = p.get("displayName", {}).get("text", "Unknown")
+        address = p.get("formattedAddress", "")
+        rating = p.get("rating", "N/A")
+        maps_uri = p.get("googleMapsUri", "")
+        places_summary += f"{idx}. Name: {name}\n   Address: {address}\n   Rating: {rating}\n   Maps Link: {maps_uri}\n\n"
 
-    NAME: [Exact Cafe Name]
-    AREA: [Neighborhood Name]
-    IG_HANDLE: [instagram_handle_without_@_or_hashtag]
-    AESTHETICS: [X/5] - [Short design summary]
-    KIDS_LOGISTICS: [X/5] - [Short stroller/kids summary]
-    SUMMARY: [1-sentence summary]
+    prompt = f"""
+    You are an expert family outing curator for Kuala Lumpur.
+    
+    Below are verified, currently operational cafes/spots retrieved directly from Google Places API:
+
+    {places_summary}
+
+    For EACH of the places listed above, provide a kid/aesthetic evaluation based on your knowledge of these real venues.
+    
+    Format output strictly as:
+
+    ☕ **[Place Name]** ([Neighborhood/Area])
+    📍 [Open in Google Maps]([Use exact Maps Link provided above])
+    📸 [Search Instagram](https://www.instagram.com/explore/search/keyword/?q=[Place+Name+UrlEncoded])
+    • **Aesthetics Rating:** ⭐ [X/5] - [Short design note: Japandi, oak, minimalist, greenery]
+    • **Kids Logistics Rating:** ⭐ [X/5] - [Short stroller/high chair/spacing note]
+    • **Summary:** [1-line summary]
+
     ---
     """
 
-    print("Generating verified recommendations...")
+    print("Generating evaluation with Gemini 3.6 Flash...")
     response = client.models.generate_content(
         model="gemini-3.6-flash",
         contents=prompt
     )
-    
-    # Parse output lines and build real, working URLs programmatically
-    raw_text = response.text
-    blocks = raw_text.split("---")
-    
-    formatted_spots = []
-    for block in blocks:
-        lines = [line.strip() for line in block.strip().split("\n") if line.strip()]
-        data = {}
-        for line in lines:
-            if ":" in line:
-                key, val = line.split(":", 1)
-                data[key.strip()] = val.strip()
-        
-        if "NAME" in data and "AREA" in data:
-            name = data["NAME"]
-            area = data["AREA"]
-            
-            # Construct real, clickable Google Maps Search URL
-            query = urllib.parse.quote(f"{name} {area} KL")
-            maps_url = f"https://www.google.com/maps/search/?api=1&query={query}"
-            
-            ig = data.get("IG_HANDLE", "").replace("@", "").replace("#", "")
-            ig_url = f"https://www.instagram.com/explore/tags/{ig}/" if ig else "N/A"
-            
-            formatted_spot = (
-                f"☕ **{name}** ({area})\n"
-                f"📍 [Open in Google Maps]({maps_url})\n"
-                f"📸 [View on Instagram]({ig_url})\n"
-                f"• **Aesthetics Rating:** ⭐ {data.get('AESTHETICS', 'N/A')}\n"
-                f"• **Kids Logistics Rating:** ⭐ {data.get('KIDS_LOGISTICS', 'N/A')}\n"
-                f"• **Summary:** {data.get('SUMMARY', '')}\n"
-            )
-            formatted_spots.append(formatted_spot)
-
-    return "\n".join(formatted_spots[:3])
+    return response.text
 
 if __name__ == "__main__":
-    report = discover_fresh_spots()
-    message = f"☕ **Verified Weekend Spot Recommendations** 🎈\n\n{report}"
-    send_telegram_message(message)
-    print("Report sent to Telegram successfully!")
-    
+    try:
+        print("Fetching real venues from Google Places API...")
+        verified_places = fetch_real_places()
+        
+        if not verified_places:
+            report = "No operational venues found in this re-roll batch. Please re-roll again!"
+        else:
+            report = evaluate_places_with_gemini(verified_places)
+            
+        message = f"☕ **Verified Weekend Spot Recommendations** 🎈\n\n{report}"
+        send_telegram_message(message)
+        print("Successfully sent verified Places API recommendations to Telegram!")
+    except Exception as e:
+        print(f"Error during execution: {e}")
+        raise e
+        
