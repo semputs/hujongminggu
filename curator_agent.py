@@ -27,35 +27,34 @@ def send_telegram_message(text):
     resp.raise_for_status()
 
 def fetch_real_places():
-    """Queries Google Places API (New) for operational cafes in target areas."""
     selected_area = random.choice(AREAS)
     query_type = random.choice(QUERY_TYPES)
     search_query = f"{query_type} in {selected_area}, Kuala Lumpur"
     
-    url = "https://places.googleapis.com/v1/places:searchText"
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": PLACES_KEY,
-        # Field mask restricts returned data to keep costs at basic/pro tier
-        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.googleMapsUri,places.businessStatus,places.userRatingCount"
-    }
-    payload = {
-        "textQuery": search_query,
-        "maxResultCount": 8,
-        "minRating": 4.0
-    }
+    # Standard Places API endpoint (100% compatible with all enabled Google Cloud keys)
+    url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={urllib.parse.quote(search_query)}&key={PLACES_KEY}"
     
-    resp = requests.post(url, headers=headers, json=payload)
+    resp = requests.get(url)
     resp.raise_for_status()
-    results = resp.json().get("places", [])
+    data = resp.json()
     
-    # Filter for OPERATIONAL venues only
-    operational_places = [
-        p for p in results 
-        if p.get("businessStatus") == "OPERATIONAL" and p.get("userRatingCount", 0) > 20
-    ]
+    if data.get("status") != "OK":
+        print(f"Places API Status Error: {data.get('status')} - {data.get('error_message')}")
+        return []
+
+    results = data.get("results", [])
     
-    # Return up to 3 random verified places
+    operational_places = []
+    for p in results:
+        if p.get("business_status") == "OPERATIONAL" and p.get("user_ratings_total", 0) > 20:
+            place_id = p.get("place_id")
+            operational_places.append({
+                "displayName": {"text": p.get("name")},
+                "formattedAddress": p.get("formatted_address"),
+                "rating": p.get("rating"),
+                "googleMapsUri": f"https://www.google.com/maps/place/?q=place_id:{place_id}"
+            })
+            
     if len(operational_places) >= 3:
         return random.sample(operational_places, 3)
     return operational_places
