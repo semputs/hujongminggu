@@ -11,7 +11,6 @@ CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 client = genai.Client(api_key=GEMINI_KEY)
 
-# Target neighborhoods to randomly cycle through
 AREAS = ["Taman Melawati", "Wangsa Maju", "Setapak", "Ampang"]
 QUERY_TYPES = ["aesthetic cafe", "family friendly cafe", "bakery cafe", "garden cafe"]
 
@@ -23,7 +22,6 @@ def send_telegram_message(text):
         "disable_web_page_preview": False
     }
     resp = requests.post(url, json=payload)
-    print(f"Telegram API Status: {resp.status_code}")
     resp.raise_for_status()
 
 def fetch_real_places():
@@ -31,43 +29,42 @@ def fetch_real_places():
     query_type = random.choice(QUERY_TYPES)
     search_query = f"{query_type} in {selected_area}, Kuala Lumpur"
     
-    # Standard Places API endpoint (100% compatible with all enabled Google Cloud keys)
-    url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={urllib.parse.quote(search_query)}&key={PLACES_KEY}"
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": PLACES_KEY.strip() if PLACES_KEY else "",
+        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.googleMapsUri,places.businessStatus,places.userRatingCount"
+    }
+    payload = {
+        "textQuery": search_query,
+        "minRating": 4.0
+    }
     
-    resp = requests.get(url)
-    resp.raise_for_status()
-    data = resp.json()
+    resp = requests.post(url, headers=headers, json=payload)
+    print(f"Places API Response Code: {resp.status_code}")
     
-    if data.get("status") != "OK":
-        print(f"Places API Status Error: {data.get('status')} - {data.get('error_message')}")
-        return []
-
-    results = data.get("results", [])
+    if resp.status_code != 200:
+        print(f"Places API Error Body: {resp.text}")
+        resp.raise_for_status()
+        
+    results = resp.json().get("places", [])
     
-    operational_places = []
-    for p in results:
-        if p.get("business_status") == "OPERATIONAL" and p.get("user_ratings_total", 0) > 20:
-            place_id = p.get("place_id")
-            operational_places.append({
-                "displayName": {"text": p.get("name")},
-                "formattedAddress": p.get("formatted_address"),
-                "rating": p.get("rating"),
-                "googleMapsUri": f"https://www.google.com/maps/place/?q=place_id:{place_id}"
-            })
-            
+    operational_places = [
+        p for p in results 
+        if p.get("businessStatus") == "OPERATIONAL" and p.get("userRatingCount", 0) > 10
+    ]
+    
     if len(operational_places) >= 3:
         return random.sample(operational_places, 3)
     return operational_places
 
 def evaluate_places_with_gemini(places):
-    """Passes verified real places to Gemini 3.6 Flash for aesthetic & logistics evaluation."""
     places_summary = ""
     for idx, p in enumerate(places, 1):
         name = p.get("displayName", {}).get("text", "Unknown")
         address = p.get("formattedAddress", "")
-        rating = p.get("rating", "N/A")
         maps_uri = p.get("googleMapsUri", "")
-        places_summary += f"{idx}. Name: {name}\n   Address: {address}\n   Rating: {rating}\n   Maps Link: {maps_uri}\n\n"
+        places_summary += f"{idx}. Name: {name}\n   Address: {address}\n   Maps Link: {maps_uri}\n\n"
 
     prompt = f"""
     You are an expert family outing curator for Kuala Lumpur.
@@ -76,21 +73,20 @@ def evaluate_places_with_gemini(places):
 
     {places_summary}
 
-    For EACH of the places listed above, provide a kid/aesthetic evaluation based on your knowledge of these real venues.
+    For EACH of the places listed above, evaluate them based on your knowledge of these real spots.
     
     Format output strictly as:
 
     ☕ **[Place Name]** ([Neighborhood/Area])
     📍 [Open in Google Maps]([Use exact Maps Link provided above])
     📸 [Search Instagram](https://www.instagram.com/explore/search/keyword/?q=[Place+Name+UrlEncoded])
-    • **Aesthetics Rating:** ⭐ [X/5] - [Short design note: Japandi, oak, minimalist, greenery]
-    • **Kids Logistics Rating:** ⭐ [X/5] - [Short stroller/high chair/spacing note]
+    • **Aesthetics Rating:** ⭐ [X/5] - [Short design note]
+    • **Kids Logistics Rating:** ⭐ [X/5] - [Short stroller/kids note]
     • **Summary:** [1-line summary]
 
     ---
     """
 
-    print("Generating evaluation with Gemini 3.6 Flash...")
     response = client.models.generate_content(
         model="gemini-3.6-flash",
         contents=prompt
@@ -99,11 +95,11 @@ def evaluate_places_with_gemini(places):
 
 if __name__ == "__main__":
     try:
-        print("Fetching real venues from Google Places API...")
+        print("Fetching real venues from Google Places API (New)...")
         verified_places = fetch_real_places()
         
         if not verified_places:
-            report = "No operational venues found in this re-roll batch. Please re-roll again!"
+            report = "No operational venues found in this search batch. Please re-roll again!"
         else:
             report = evaluate_places_with_gemini(verified_places)
             
