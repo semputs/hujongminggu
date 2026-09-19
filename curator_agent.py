@@ -31,18 +31,33 @@ def fetch_all_apify_captions():
     """Fetches ALL items from the latest Apify Instagram Scraper dataset."""
     print("Fetching scraped post captions from Apify...")
     try:
-        # Fetch the most recent dataset/run from your Apify account
+        # Get the latest run for the Instagram Scraper actor
         runs = apify_client.actor("apify/instagram-scraper").runs().list(limit=1, desc=True)
         if not runs.items:
             print("No recent Apify runs found.")
             return []
         
-        last_run_id = runs.items[0]["defaultDatasetId"]
-        dataset_items = apify_client.dataset(last_run_id).list_items().items
+        last_run = runs.items[0]
+        # Access default_dataset_id as an object attribute instead of a dictionary key
+        dataset_id = getattr(last_run, "default_dataset_id", None) or getattr(last_run, "defaultDatasetId", None)
+        
+        if not dataset_id and isinstance(last_run, dict):
+            dataset_id = last_run.get("defaultDatasetId") or last_run.get("default_dataset_id")
+
+        if not dataset_id:
+            print("Could not locate default dataset ID from latest run.")
+            return []
+
+        dataset_items = apify_client.dataset(dataset_id).list_items().items
         
         captions = []
         for item in dataset_items:
-            caption = item.get("caption") or item.get("text") or ""
+            # Handle both dictionary and object formats safely
+            if isinstance(item, dict):
+                caption = item.get("caption") or item.get("text") or ""
+            else:
+                caption = getattr(item, "caption", "") or getattr(item, "text", "")
+                
             if caption:
                 captions.append(caption)
                 
