@@ -1,10 +1,7 @@
 name: Weekly Curator Agent
 
 on:
-  schedule:
-    # Runs every Thursday at 10:00 AM UTC (6:00 PM MYT)
-    - cron: '0 10 * * 4'
-  workflow_dispatch: # Allows manual trigger testing from GitHub UI
+  workflow_dispatch: # Allows n8n, Telegram, and manual triggers
 
 jobs:
   run-agent:
