@@ -28,43 +28,40 @@ def send_telegram_message(text):
     resp.raise_for_status()
 
 def fetch_all_apify_captions():
-    """Fetches ALL items from the latest Apify Instagram Scraper dataset."""
-    print("Fetching scraped post captions from Apify...")
+    """Triggers Apify to run a fresh live scrape of the target Instagram accounts."""
+    print("Triggering Apify to scrape fresh Instagram posts...")
     try:
-        # Get the latest run for the Instagram Scraper actor
-        runs = apify_client.actor("apify/instagram-scraper").runs().list(limit=1, desc=True)
-        if not runs.items:
-            print("No recent Apify runs found.")
-            return []
+        # Option A: If calling the Instagram Scraper actor directly with your inputs
+        run_input = {
+            "directUrls": [
+                "https://www.instagram.com/kl.foodie/",
+                "https://www.instagram.com/jcinthehizzay/",
+                "https://www.instagram.com/eatdrinkklcom/",
+                "https://www.instagram.com/makanan_jepun_my/",
+                "https://www.instagram.com/giraffeeatleaf/",
+                "https://www.instagram.com/transit.taste.trail/",
+                
+                # Add your 4 target accounts here
+            ],
+            "resultsLimit": 10,
+        }
         
-        last_run = runs.items[0]
-        # Access default_dataset_id as an object attribute instead of a dictionary key
-        dataset_id = getattr(last_run, "default_dataset_id", None) or getattr(last_run, "defaultDatasetId", None)
+        # This CALLS Apify to run live right now
+        run = apify_client.actor("apify/instagram-scraper").call(run_input=run_input)
         
-        if not dataset_id and isinstance(last_run, dict):
-            dataset_id = last_run.get("defaultDatasetId") or last_run.get("default_dataset_id")
-
-        if not dataset_id:
-            print("Could not locate default dataset ID from latest run.")
-            return []
-
-        dataset_items = apify_client.dataset(dataset_id).list_items().items
+        # Fetch dataset items directly from this fresh run
+        dataset_items = apify_client.dataset(run["defaultDatasetId"]).list_items().items
         
         captions = []
         for item in dataset_items:
-            # Handle both dictionary and object formats safely
-            if isinstance(item, dict):
-                caption = item.get("caption") or item.get("text") or ""
-            else:
-                caption = getattr(item, "caption", "") or getattr(item, "text", "")
-                
+            caption = item.get("caption") or item.get("text") or ""
             if caption:
                 captions.append(caption)
                 
-        print(f"Successfully retrieved {len(captions)} post captions from Apify.")
+        print(f"Successfully scraped and retrieved {len(captions)} fresh post captions from Apify.")
         return captions
     except Exception as e:
-        print(f"Error fetching Apify dataset: {e}")
+        print(f"Error running Apify scrape: {e}")
         return []
 
 def extract_candidates_from_20_posts(captions):
