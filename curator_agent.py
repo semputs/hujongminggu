@@ -31,7 +31,6 @@ def fetch_all_apify_captions():
     """Triggers Apify to run a fresh live scrape of the target Instagram accounts."""
     print("Triggering Apify to scrape fresh Instagram posts...")
     try:
-        # Option A: If calling the Instagram Scraper actor directly with your inputs
         run_input = {
             "directUrls": [
                 "https://www.instagram.com/kl.foodie/",
@@ -40,21 +39,31 @@ def fetch_all_apify_captions():
                 "https://www.instagram.com/makanan_jepun_my/",
                 "https://www.instagram.com/giraffeeatleaf/",
                 "https://www.instagram.com/transit.taste.trail/",
-                
-                # Add your 4 target accounts here
             ],
             "resultsLimit": 10,
         }
         
-        # This CALLS Apify to run live right now
+        # Trigger the Apify Instagram Scraper Actor
         run = apify_client.actor("apify/instagram-scraper").call(run_input=run_input)
         
-        # Fetch dataset items directly from this fresh run
-        dataset_items = apify_client.dataset(run["defaultDatasetId"]).list_items().items
+        # Safely extract dataset ID using attribute or dictionary access
+        dataset_id = getattr(run, "default_dataset_id", None) or getattr(run, "defaultDatasetId", None)
+        if not dataset_id and isinstance(run, dict):
+            dataset_id = run.get("defaultDatasetId") or run.get("default_dataset_id")
+
+        if not dataset_id:
+            print("Could not locate default dataset ID from Apify run.")
+            return []
+
+        dataset_items = apify_client.dataset(dataset_id).list_items().items
         
         captions = []
         for item in dataset_items:
-            caption = item.get("caption") or item.get("text") or ""
+            if isinstance(item, dict):
+                caption = item.get("caption") or item.get("text") or ""
+            else:
+                caption = getattr(item, "caption", "") or getattr(item, "text", "")
+                
             if caption:
                 captions.append(caption)
                 
@@ -65,7 +74,7 @@ def fetch_all_apify_captions():
         return []
 
 def extract_candidates_from_20_posts(captions):
-    """Passes ALL 20 post captions to Gemini to identify mentioned venues in target areas."""
+    """Passes ALL scraped post captions to Gemini to identify mentioned venues in target areas."""
     if not captions:
         print("No captions found. Falling back to area search.")
         return ["Mori Kohi", "Contour Melawati", "VCR Ritchie"]
@@ -88,7 +97,7 @@ def extract_candidates_from_20_posts(captions):
        Example Output: "Mori Kohi, Contour, Knead and Feed, VCR Ritchie"
     """
 
-    print("Analyzing all 20 captions with Gemini 3.6 Flash...")
+    print("Analyzing captions with Gemini 3.6 Flash...")
     response = client.models.generate_content(
         model="gemini-3.6-flash",
         contents=prompt
@@ -173,7 +182,7 @@ def select_and_curate_top_3(verified_places):
 
 if __name__ == "__main__":
     try:
-        # Step 1: Retrieve all 20 scraped captions from Apify
+        # Step 1: Retrieve all scraped captions from Apify
         captions = fetch_all_apify_captions()
         
         # Step 2: Extract candidate venues from the full batch
@@ -190,7 +199,7 @@ if __name__ == "__main__":
             
         message = f"☕ **Verified Social Trend Spot Recommendations** 🎈\n\n{report}"
         send_telegram_message(message)
-        print("Successfully sent 20-post social recommendations to Telegram!")
+        print("Successfully sent social recommendations to Telegram!")
     except Exception as e:
         print(f"Execution failed: {e}")
         raise e
